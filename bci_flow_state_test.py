@@ -8,8 +8,8 @@ import threading
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-TIMER_DURATION_SECONDS = 10
-BREAK_DURATION_SECONDS = 2
+TIMER_DURATION_SECONDS = 15 # change to appropriate value during testing e.g. 300
+BREAK_DURATION_SECONDS = 5 # change to appropriate value during testing e.g. 120
 MAX_CYCLES = 4
 MUSIC_FOLDER = "music"
 
