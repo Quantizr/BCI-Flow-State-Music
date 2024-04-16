@@ -144,6 +144,7 @@ class TimerApp:
         self.timer_label = tk.Label(self.root, text="", font=("Arial", 24), wraplength=300)
         self.break_label = tk.Label(self.root, text="", font=("Arial", 18), fg="gray", wraplength=300)
         self.continue_button = tk.Button(self.root, text="Continue", command=self.on_continue, state=tk.DISABLED, fg="gray")
+        self.udp_listeners = []
 
     def start_timer(self):
         self.current_cycle = 1
@@ -154,16 +155,20 @@ class TimerApp:
         self.timer_label.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
         print("Test 1: None")
         self.countdown(TIMER_DURATION_SECONDS)
+        self.start_udp_listener()
+    
+    def start_udp_listener(self):
+        self.udp_listener = UDPListener(self)
+        self.udp_listeners.append(self.udp_listener)
         self.udp_listener.start()
-
+    
     def countdown(self, seconds):
         self.timer_running = True
         self.remaining_time = seconds
         if seconds <= 0:
             self.timer_running = False
             self.remaining_time = 0
-            self.udp_listener.stop()
-            self.udp_listener.join()
+            self.stop_udp_listener()
             self.create_summary_log()
             self.create_graph()
             if self.current_cycle != 1:
@@ -185,6 +190,21 @@ class TimerApp:
             self.timer_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
             self.remaining_time = seconds
             self.root.after(1000, self.countdown, seconds - 1)
+    
+    def stop_udp_listener(self):
+        for listener in self.udp_listeners:
+            listener.stop()
+            listener.join()
+        self.udp_listeners = []
+    
+    def on_continue(self):
+        self.current_cycle += 1
+        self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
+        self.break_label.place_forget()
+        self.continue_button.place_forget()
+        self.countdown(TIMER_DURATION_SECONDS)
+        self.music_player.play_music(self.current_cycle)
+        self.start_udp_listener()
 
     def get_remaining_time(self):
         return self.remaining_time
@@ -198,14 +218,6 @@ class TimerApp:
             remaining_seconds = seconds % 60
             self.break_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
             self.root.after(1000, self.break_countdown, seconds - 1)
-    
-    def on_continue(self):
-        self.current_cycle += 1
-        self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
-        self.break_label.place_forget()
-        self.continue_button.place_forget()
-        self.countdown(TIMER_DURATION_SECONDS)
-        self.music_player.play_music(self.current_cycle)
     
     def create_summary_log(self):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
