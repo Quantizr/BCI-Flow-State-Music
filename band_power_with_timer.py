@@ -4,8 +4,9 @@ import json
 import threading
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
 
-TIMER_DURATION_SECONDS = 10
+TIMER_DURATION_SECONDS = 300
 
 class UDPListener(threading.Thread):
     def __init__(self):
@@ -13,6 +14,10 @@ class UDPListener(threading.Thread):
         self.stop_event = threading.Event()
         self.band_powers = []
         self.theta_alpha_ratios = []
+        self.timestamps = []
+        self.theta_values = []
+        self.alpha_values = []
+        self.theta_alpha_ratio_values = []
         self.detailed_log_file = None
 
     def run(self):
@@ -70,6 +75,12 @@ class UDPListener(threading.Thread):
         self.detailed_log_file.write(json.dumps(log_entry) + "\n")
         self.detailed_log_file.flush()
 
+        # Save data for graph plotting
+        self.timestamps.append(datetime.now())
+        self.theta_values.append(avg_theta)
+        self.alpha_values.append(avg_alpha)
+        self.theta_alpha_ratio_values.append(theta_alpha_ratio)
+
     def stop(self):
         self.stop_event.set()
 
@@ -84,12 +95,12 @@ def countdown(seconds):
         timer_label.config(text="Time's up!")
         udp_listener.stop()  # Stop listening for UDP data when time is up
         create_summary_log()
+        create_graph()
     else:
         minutes = seconds // 60
         remaining_seconds = seconds % 60
         timer_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
         root.after(1000, countdown, seconds - 1)
-
 
 def create_summary_log():
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -108,7 +119,7 @@ def create_summary_log():
             start_index = num_samples // 3
             end_index = 2 * start_index
             avg_band_powers_middle = [sum(x[i] for x in udp_listener.band_powers[start_index:end_index]) / (end_index - start_index) for i in range(5)]
-            summary_log_file.write(f"Average Band Powers (Middle Third):\n")
+            summary_log_file.write("Average Band Powers (Middle Third):\n")
             summary_log_file.write(json.dumps(avg_band_powers_middle) + "\n\n")
 
         # Calculate average theta/alpha ratio across the whole duration
@@ -123,6 +134,32 @@ def create_summary_log():
             summary_log_file.write("Average Theta/Alpha Ratio (Middle Third):\n")
             summary_log_file.write(str(avg_theta_alpha_middle) + "\n\n")
 
+def create_graph():
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    graph_file_path = os.path.join("logs", f"{timestamp}_graph.png")
+
+    # Convert timestamps to seconds relative to the start time
+    start_time = udp_listener.timestamps[0]
+    seconds_since_start = [(t - start_time).total_seconds() for t in udp_listener.timestamps]
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot theta values
+    plt.plot(seconds_since_start, udp_listener.theta_values, label='Theta', color='blue')
+
+    # Plot alpha values
+    plt.plot(seconds_since_start, udp_listener.alpha_values, label='Alpha', color='green')
+
+    # Plot theta/alpha ratio values
+    plt.plot(seconds_since_start, udp_listener.theta_alpha_ratio_values, label='Theta/Alpha Ratio', color='red')
+
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Value')
+    plt.title('Theta, Alpha, and Theta/Alpha Ratio Over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(graph_file_path)
+    plt.close()
 
 def on_closing():
     if udp_listener.is_alive():
