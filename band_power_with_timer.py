@@ -17,7 +17,6 @@ class UDPListener(threading.Thread):
         self.timestamps = []
         self.theta_values = []
         self.alpha_values = []
-        self.theta_alpha_ratio_values = []
         self.detailed_log_file = None
 
     def run(self):
@@ -55,6 +54,11 @@ class UDPListener(threading.Thread):
         avg_theta = channel_averages[1]
         avg_alpha = channel_averages[2]
 
+        # Save data for graph plotting
+        self.timestamps.append(datetime.now())
+        self.theta_values.append(avg_theta)
+        self.alpha_values.append(avg_alpha)
+        
         # Calculate theta/alpha ratio
         theta_alpha_ratio = avg_theta / avg_alpha if avg_alpha != 0 else float('inf')
 
@@ -75,11 +79,7 @@ class UDPListener(threading.Thread):
         self.detailed_log_file.write(json.dumps(log_entry) + "\n")
         self.detailed_log_file.flush()
 
-        # Save data for graph plotting
-        self.timestamps.append(datetime.now())
-        self.theta_values.append(avg_theta)
-        self.alpha_values.append(avg_alpha)
-        self.theta_alpha_ratio_values.append(theta_alpha_ratio)
+
 
     def stop(self):
         self.stop_event.set()
@@ -151,7 +151,7 @@ def create_graph():
     plt.plot(seconds_since_start, udp_listener.alpha_values, label='Alpha', color='green')
 
     # Plot theta/alpha ratio values
-    plt.plot(seconds_since_start, udp_listener.theta_alpha_ratio_values, label='Theta/Alpha Ratio', color='red')
+    plt.plot(seconds_since_start, udp_listener.theta_alpha_ratios, label='Theta/Alpha Ratio', color='red')
 
     plt.xlabel('Time (seconds)')
     plt.ylabel('Value')
