@@ -5,6 +5,8 @@ import threading
 import os
 from datetime import datetime
 
+TIMER_DURATION_SECONDS = 10
+
 class UDPListener(threading.Thread):
     def __init__(self):
         super().__init__()
@@ -74,7 +76,7 @@ class UDPListener(threading.Thread):
 def start_timer():
     start_button.place_forget()  # Remove the start button
     timer_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)  # Place the timer label in the middle
-    countdown(300)  # Start a 5-minute (300 seconds) countdown
+    countdown(TIMER_DURATION_SECONDS)  # Start the countdown with the global duration
     udp_listener.start()  # Start listening for UDP data
 
 def countdown(seconds):
@@ -86,18 +88,19 @@ def countdown(seconds):
         minutes = seconds // 60
         remaining_seconds = seconds % 60
         timer_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
-        root.after(1000, lambda: countdown(seconds - 1))
+        root.after(1000, countdown, seconds - 1)
+
 
 def create_summary_log():
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     summary_log_file_path = os.path.join("logs", f"{timestamp}_summary_log.txt")
 
     with open(summary_log_file_path, "w") as summary_log_file:
-        # Calculate average band powers across the whole five minutes
+        # Calculate average band powers across the whole duration
         num_samples = len(udp_listener.band_powers)
         if num_samples > 0:
             avg_band_powers_whole = [sum(x[i] for x in udp_listener.band_powers) / num_samples for i in range(5)]
-            summary_log_file.write("Average Band Powers (Whole 5 Minutes):\n")
+            summary_log_file.write(f"Average Band Powers (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
             summary_log_file.write(json.dumps(avg_band_powers_whole) + "\n\n")
 
         # Calculate average band powers across the middle third
@@ -105,13 +108,13 @@ def create_summary_log():
             start_index = num_samples // 3
             end_index = 2 * start_index
             avg_band_powers_middle = [sum(x[i] for x in udp_listener.band_powers[start_index:end_index]) / (end_index - start_index) for i in range(5)]
-            summary_log_file.write("Average Band Powers (Middle Third):\n")
+            summary_log_file.write(f"Average Band Powers (Middle Third):\n")
             summary_log_file.write(json.dumps(avg_band_powers_middle) + "\n\n")
 
-        # Calculate average theta/alpha ratio across the whole five minutes
+        # Calculate average theta/alpha ratio across the whole duration
         if len(udp_listener.theta_alpha_ratios) > 0:
             avg_theta_alpha_whole = sum(udp_listener.theta_alpha_ratios) / len(udp_listener.theta_alpha_ratios)
-            summary_log_file.write("Average Theta/Alpha Ratio (Whole 5 Minutes):\n")
+            summary_log_file.write(f"Average Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
             summary_log_file.write(str(avg_theta_alpha_whole) + "\n\n")
 
         # Calculate average theta/alpha ratio across the middle third
@@ -119,6 +122,7 @@ def create_summary_log():
             avg_theta_alpha_middle = sum(udp_listener.theta_alpha_ratios[start_index:end_index]) / (end_index - start_index)
             summary_log_file.write("Average Theta/Alpha Ratio (Middle Third):\n")
             summary_log_file.write(str(avg_theta_alpha_middle) + "\n\n")
+
 
 def on_closing():
     if udp_listener.is_alive():
