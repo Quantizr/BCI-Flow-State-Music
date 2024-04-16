@@ -11,11 +11,10 @@ import matplotlib.pyplot as plt
 TIMER_DURATION_SECONDS = 10
 BREAK_DURATION_SECONDS = 2
 MAX_CYCLES = 4
-
 MUSIC_FOLDER = "music"
 
 class UDPListener(threading.Thread):
-    def __init__(self):
+    def __init__(self, timer_app):
         super().__init__()
         self.stop_event = threading.Event()
         self.band_powers = []
@@ -24,13 +23,14 @@ class UDPListener(threading.Thread):
         self.theta_values = []
         self.alpha_values = []
         self.detailed_log_file = None
+        self.timer_app = timer_app
 
     def run(self):
         self.start_udp_listener()
 
     def start_udp_listener(self):
-        UDP_IP = "127.0.0.1"  # Replace with the appropriate IP address if needed
-        UDP_PORT = 12345  # Replace with the appropriate port number if needed
+        UDP_IP = "127.0.0.1"
+        UDP_PORT = 12345
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind((UDP_IP, UDP_PORT))
@@ -49,32 +49,31 @@ class UDPListener(threading.Thread):
                     self.process_band_power_data(data_dict)
 
             if self.detailed_log_file:
-                self.detailed_log_file.close()  # Close the detailed log file when the thread ends
+                self.detailed_log_file.close()
 
     def process_band_power_data(self, data_dict):
         band_power_data = data_dict["data"]
         num_channels = len(band_power_data)
 
-        # Calculate channel averages [delta, theta, alpha, beta, gamma]
         channel_averages = [sum(row[i] for row in band_power_data) / num_channels for i in range(5)]
         avg_theta = channel_averages[1]
         avg_alpha = channel_averages[2]
 
-        # Save data for graph plotting
         self.timestamps.append(datetime.now())
         self.theta_values.append(avg_theta)
         self.alpha_values.append(avg_alpha)
-        
-        # Calculate theta/alpha ratio
+
         theta_alpha_ratio = avg_theta / avg_alpha if avg_alpha != 0 else float('inf')
 
         self.band_powers.append(channel_averages)
         self.theta_alpha_ratios.append(theta_alpha_ratio)
 
-        # Write to detailed log file
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         log_entry = {
             "timestamp": timestamp,
+            "test_interval": self.timer_app.current_cycle,
+            "current_genre": self.timer_app.music_player.current_genre,
+            "current_song": self.timer_app.music_player.current_song,
             "band_power_data": band_power_data,
             "channel_averages": channel_averages,
             "num_channels": num_channels,
@@ -88,174 +87,186 @@ class UDPListener(threading.Thread):
     def stop(self):
         self.stop_event.set()
 
+class MusicPlayer:
+    def __init__(self, timer_app):
+        self.timer_app = timer_app
+        self.current_genre = None
+        self.current_song = None
+        self.used_genres = []
+        self.played_songs = []
 
-def create_summary_log():
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    summary_log_file_path = os.path.join("logs", f"{timestamp}_summary_log.txt")
-
-    with open(summary_log_file_path, "w") as summary_log_file:
-        # Calculate average band powers across the whole duration
-        num_samples = len(udp_listener.band_powers)
-        if num_samples > 0:
-            avg_band_powers_whole = [sum(x[i] for x in udp_listener.band_powers) / num_samples for i in range(5)]
-            summary_log_file.write(f"Average Band Powers (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
-            summary_log_file.write(json.dumps(avg_band_powers_whole) + "\n\n")
-
-        # Calculate average band powers across the middle third
-        if num_samples > 0:
-            start_index = num_samples // 3
-            end_index = 2 * start_index
-            avg_band_powers_middle = [sum(x[i] for x in udp_listener.band_powers[start_index:end_index]) / (end_index - start_index) for i in range(5)]
-            summary_log_file.write("Average Band Powers (Middle Third):\n")
-            summary_log_file.write(json.dumps(avg_band_powers_middle) + "\n\n")
-
-        # Calculate average theta/alpha ratio across the whole duration
-        if len(udp_listener.theta_alpha_ratios) > 0:
-            avg_theta_alpha_whole = sum(udp_listener.theta_alpha_ratios) / len(udp_listener.theta_alpha_ratios)
-            summary_log_file.write(f"Average Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
-            summary_log_file.write(str(avg_theta_alpha_whole) + "\n\n")
-
-        # Calculate average theta/alpha ratio across the middle third
-        if len(udp_listener.theta_alpha_ratios) > 0:
-            avg_theta_alpha_middle = sum(udp_listener.theta_alpha_ratios[start_index:end_index]) / (end_index - start_index)
-            summary_log_file.write("Average Theta/Alpha Ratio (Middle Third):\n")
-            summary_log_file.write(str(avg_theta_alpha_middle) + "\n\n")
-
-def create_graph():
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    graph_file_path = os.path.join("logs", f"{timestamp}_graph.png")
-
-    # Convert timestamps to seconds relative to the start time
-    start_time = udp_listener.timestamps[0]
-    seconds_since_start = [(t - start_time).total_seconds() for t in udp_listener.timestamps]
-
-    plt.figure(figsize=(10, 6))
-    
-    print(len(udp_listener.timestamps))
-    print(len(udp_listener.theta_values))
-
-    # Plot theta, alpha, theta/alpha ratio values
-    plt.plot(seconds_since_start, udp_listener.theta_values, label='Theta', color='blue')
-    plt.plot(seconds_since_start, udp_listener.alpha_values, label='Alpha', color='green')
-    plt.plot(seconds_since_start, udp_listener.theta_alpha_ratios, label='Theta/Alpha Ratio', color='red')
-
-    plt.xlabel('Time (seconds)')
-    plt.ylabel('Value')
-    plt.title('Theta, Alpha, and Theta/Alpha Ratio Over Time')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(graph_file_path)
-    plt.close()
-
-def start_timer():
-    global current_cycle, used_genres
-    current_cycle = 1
-    used_genres = []
-    start_button.place_forget()
-    test_interval_label.place(relx=0.5, rely=0.1, anchor=tk.CENTER)
-    test_interval_label.config(text=f"Test Interval {current_cycle}")
-    timer_label.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
-    print("Test 1: None") # no music during Test 1
-    countdown(TIMER_DURATION_SECONDS)
-    udp_listener.start()  # Start listening for UDP data
-
-def play_music():
-    global current_genre
-    available_genres = [genre for genre in os.listdir(MUSIC_FOLDER) if genre not in used_genres]
-    if available_genres:
-        current_genre = random.choice(available_genres)
-        used_genres.append(current_genre)
-        print(f"Test {current_cycle}: {current_genre}")
-        mixer.init()
-        genre_folder = os.path.join(MUSIC_FOLDER, current_genre)
-        songs = [os.path.join(genre_folder, song) for song in os.listdir(genre_folder)]
-        random.shuffle(songs)
-        play_song(songs)
-    else:
-        print(f"Test {current_cycle}: All Genres Have Been Played")
-
-def play_song(songs):
-    if songs:
-        song = songs.pop(0)
-        print(os.path.splitext(os.path.basename(song))[0])
-        mixer.music.load(song)
-        mixer.music.play()
-        root.after(int(mixer.Sound(song).get_length() * 1000), play_song, songs)
-
-def countdown(seconds):
-    global current_cycle
-    if seconds <= 0:
-        udp_listener.stop()  # Stop listening for UDP data when time is up
-        create_summary_log()
-        create_graph()
-        if (current_cycle != 1):
-            mixer.music.stop()
-        if current_cycle == MAX_CYCLES:
-            timer_label.config(text="Congratulations!\nYou have completed the Musical Flow State Test!")
-            continue_button.place_forget()
-            test_interval_label.place_forget()
+    def play_music(self, current_cycle):
+        available_genres = [genre for genre in os.listdir(MUSIC_FOLDER) if genre not in self.used_genres]
+        if available_genres:
+            self.current_genre = random.choice(available_genres)
+            self.used_genres.append(self.current_genre)
+            print(f"Test {current_cycle}: {self.current_genre}")
+            mixer.init()
+            genre_folder = os.path.join(MUSIC_FOLDER, self.current_genre)
+            songs = [os.path.join(genre_folder, song) for song in os.listdir(genre_folder)]
+            random.shuffle(songs)
+            self.played_songs = []
+            self.play_song(songs)
         else:
-            timer_label.config(text="Time's Up:\nTake a Break")
-            break_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
-            break_label.config(text=f"{BREAK_DURATION_SECONDS // 60:02d}:{BREAK_DURATION_SECONDS % 60:02d}")
-            continue_button.config(state=tk.DISABLED, fg="gray")
-            continue_button.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
-            break_countdown(BREAK_DURATION_SECONDS)
-    else:
-        minutes = seconds // 60
-        remaining_seconds = seconds % 60
-        timer_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
-        root.after(1000, countdown, seconds - 1)
+            print(f"Test {current_cycle}: All Genres Have Been Played")
 
-def break_countdown(seconds):
-    if seconds <= 0:
-        break_label.place_forget()  # Remove the break label
-        continue_button.config(state=tk.NORMAL, fg="black")  # Enable and ungrey the continue button
-    else:
-        minutes = seconds // 60
-        remaining_seconds = seconds % 60
-        break_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
-        root.after(1000, break_countdown, seconds - 1)
+    def play_song(self, songs):
+        if songs and self.timer_app.timer_running:
+            song = songs.pop(0)
+            self.current_song = os.path.splitext(os.path.basename(song))[0]
+            print(self.current_song)
+            mixer.music.load(song)
+            mixer.music.play()
+            self.played_songs.append(self.current_song)
+            song_duration = mixer.Sound(song).get_length()
+            remaining_time = self.timer_app.get_remaining_time()
+            if remaining_time > song_duration:
+                self.root.after(int(song_duration * 1000), self.play_song, songs)
 
-def on_continue():
-    global current_cycle
-    current_cycle += 1
-    test_interval_label.config(text=f"Test Interval {current_cycle}")
-    break_label.place_forget()  # Remove the break label
-    continue_button.place_forget()  # Remove the continue button
-    play_music()
-    countdown(TIMER_DURATION_SECONDS)  # Start the next countdown
 
-def on_closing():
-    mixer.quit()
-    if udp_listener.is_alive():
-        udp_listener.stop()
-        udp_listener.join()
-    root.destroy()
+class TimerApp:
+    def __init__(self, root):
+        self.root = root
+        self.current_cycle = 1
+        self.udp_listener = UDPListener(self)
+        self.timer_running = False
+        self.remaining_time = 0
+        self.music_player = MusicPlayer(self)
 
-# Set up the main window
-root = tk.Tk()
-root.title("Timer")
-root.geometry("400x300")
-root.protocol("WM_DELETE_WINDOW", on_closing)  # Add this line
+        self.root.title("Timer")
+        self.root.geometry("400x300")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-# Create a start button
-start_button = tk.Button(root, text="Start", command=start_timer)
-start_button.place(relx=0.5, rely=0.5, anchor=tk.CENTER)  # Place the start button in the middle
+        self.start_button = tk.Button(self.root, text="Start", command=self.start_timer)
+        self.start_button.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-# Create a label to display the test interval
-test_interval_label = tk.Label(root, text="", font=("Arial", 16))
+        self.test_interval_label = tk.Label(self.root, text="", font=("Arial", 16))
+        self.timer_label = tk.Label(self.root, text="", font=("Arial", 24), wraplength=300)
+        self.break_label = tk.Label(self.root, text="", font=("Arial", 18), fg="gray", wraplength=300)
+        self.continue_button = tk.Button(self.root, text="Continue", command=self.on_continue, state=tk.DISABLED, fg="gray")
 
-# Create a label to display the timer
-timer_label = tk.Label(root, text="", font=("Arial", 24), wraplength=300)
+    def start_timer(self):
+        self.current_cycle = 1
+        self.music_player.used_genres = []
+        self.start_button.place_forget()
+        self.test_interval_label.place(relx=0.5, rely=0.1, anchor=tk.CENTER)
+        self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
+        self.timer_label.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
+        print("Test 1: None")
+        self.countdown(TIMER_DURATION_SECONDS)
+        self.udp_listener.start()
 
-# Create a label to display the break timer
-break_label = tk.Label(root, text="", font=("Arial", 18), fg="gray", wraplength=300)
+    def countdown(self, seconds):
+        self.timer_running = True
+        self.remaining_time = seconds
+        if seconds <= 0:
+            self.timer_running = False
+            self.remaining_time = 0
+            self.udp_listener.stop()
+            self.udp_listener.join()
+            self.create_summary_log()
+            self.create_graph()
+            if self.current_cycle != 1:
+                mixer.music.stop()
+            if self.current_cycle == MAX_CYCLES:
+                self.timer_label.config(text="Congratulations!\nYou have completed the Musical Flow State Test!")
+                self.continue_button.place_forget()
+                self.test_interval_label.place_forget()
+            else:
+                self.timer_label.config(text="Time's Up:\nTake a Break")
+                self.break_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
+                self.break_label.config(text=f"{BREAK_DURATION_SECONDS // 60:02d}:{BREAK_DURATION_SECONDS % 60:02d}")
+                self.continue_button.config(state=tk.DISABLED, fg="gray")
+                self.continue_button.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
+                self.break_countdown(BREAK_DURATION_SECONDS)
+        else:
+            minutes = seconds // 60
+            remaining_seconds = seconds % 60
+            self.timer_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
+            self.remaining_time = seconds
+            self.root.after(1000, self.countdown, seconds - 1)
 
-# Create a continue button
-continue_button = tk.Button(root, text="Continue", command=on_continue, state=tk.DISABLED, fg="gray")
+    def get_remaining_time(self):
+        return self.remaining_time
+    
+    def break_countdown(self, seconds):
+        if seconds <= 0:
+            self.break_label.place_forget()
+            self.continue_button.config(state=tk.NORMAL, fg="black")
+        else:
+            minutes = seconds // 60
+            remaining_seconds = seconds % 60
+            self.break_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
+            self.root.after(1000, self.break_countdown, seconds - 1)
+    
+    def on_continue(self):
+        self.current_cycle += 1
+        self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
+        self.break_label.place_forget()
+        self.continue_button.place_forget()
+        self.countdown(TIMER_DURATION_SECONDS)
+        self.music_player.play_music(self.current_cycle)
+    
+    def create_summary_log(self):
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        summary_log_file_path = os.path.join("logs", f"{timestamp}_summary_log.txt")
+    
+        with open(summary_log_file_path, "w") as summary_log_file:
+            summary_log_file.write(f"Test Interval {self.current_cycle}:\n")
+            summary_log_file.write(f"Genre: {self.music_player.used_genres[-1] if self.current_cycle > 1 else 'None'}\n")
+            summary_log_file.write(f"Played Songs: {', '.join(self.music_player.played_songs) if self.current_cycle > 1 else 'None'}\n\n")
 
-# Create UDP listener thread
-udp_listener = UDPListener()
+            num_samples = len(self.udp_listener.band_powers)
+            if num_samples > 0:
+                avg_band_powers_whole = [sum(x[i] for x in self.udp_listener.band_powers) / num_samples for i in range(5)]
+                summary_log_file.write(f"Average Band Powers (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(json.dumps(avg_band_powers_whole) + "\n\n")
+    
+            if num_samples > 0:
+                start_index = num_samples // 3
+                end_index = 2 * start_index
+                avg_band_powers_middle = [sum(x[i] for x in self.udp_listener.band_powers[start_index:end_index]) / (end_index - start_index) for i in range(5)]
+                summary_log_file.write("Average Band Powers (Middle Third):\n")
+                summary_log_file.write(json.dumps(avg_band_powers_middle) + "\n\n")
+    
+            if len(self.udp_listener.theta_alpha_ratios) > 0:
+                avg_theta_alpha_whole = sum(self.udp_listener.theta_alpha_ratios) / len(self.udp_listener.theta_alpha_ratios)
+                summary_log_file.write(f"Average Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(str(avg_theta_alpha_whole) + "\n\n")
+    
+            if len(self.udp_listener.theta_alpha_ratios) > 0:
+                avg_theta_alpha_middle = sum(self.udp_listener.theta_alpha_ratios[start_index:end_index]) / (end_index - start_index)
+                summary_log_file.write("Average Theta/Alpha Ratio (Middle Third):\n")
+                summary_log_file.write(str(avg_theta_alpha_middle) + "\n\n")
+    
+    def create_graph(self):
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        graph_file_path = os.path.join("logs", f"{timestamp}_graph.png")
 
-root.mainloop()
+        start_time = self.udp_listener.timestamps[0]
+        seconds_since_start = [(t - start_time).total_seconds() for t in self.udp_listener.timestamps]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(seconds_since_start, self.udp_listener.theta_values, label='Theta', color='blue')
+        plt.plot(seconds_since_start, self.udp_listener.alpha_values, label='Alpha', color='green')
+        plt.plot(seconds_since_start, self.udp_listener.theta_alpha_ratios, label='Theta/Alpha Ratio', color='red')
+
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Value')
+        plt.title('Theta, Alpha, and Theta/Alpha Ratio Over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(graph_file_path)
+        plt.close()
+
+    def on_closing(self):
+        mixer.quit()
+        if self.udp_listener.is_alive():
+            self.udp_listener.stop()
+            self.udp_listener.join()
+        self.root.destroy()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TimerApp(root)
+    root.mainloop()
