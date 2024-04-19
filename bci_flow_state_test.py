@@ -16,7 +16,7 @@ MAX_CYCLES = 4
 MUSIC_FOLDER = "music"
 
 class UDPListener(threading.Thread):
-    def __init__(self, timer_app):
+    def __init__(self, flow_state_test_app):
         super().__init__()
         self.stop_event = threading.Event()
         self.band_powers = []
@@ -25,7 +25,7 @@ class UDPListener(threading.Thread):
         self.theta_values = []
         self.alpha_values = []
         self.detailed_log_file = None
-        self.timer_app = timer_app
+        self.flow_state_test_app = flow_state_test_app
 
     def run(self):
         self.start_udp_listener()
@@ -73,9 +73,9 @@ class UDPListener(threading.Thread):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         log_entry = {
             "timestamp": timestamp,
-            "test_interval": self.timer_app.current_cycle,
-            "current_genre": self.timer_app.music_player.current_genre,
-            "current_song": self.timer_app.music_player.current_song,
+            "test_interval": self.flow_state_test_app.current_cycle,
+            "current_genre": self.flow_state_test_app.music_player.current_genre,
+            "current_song": self.flow_state_test_app.music_player.current_song,
             "band_power_data": band_power_data,
             "channel_averages": channel_averages,
             "num_channels": num_channels,
@@ -90,8 +90,8 @@ class UDPListener(threading.Thread):
         self.stop_event.set()
 
 class MusicPlayer:
-    def __init__(self, timer_app):
-        self.timer_app = timer_app
+    def __init__(self, flow_state_test_app):
+        self.flow_state_test_app = flow_state_test_app
         self.current_genre = None
         self.current_song = None
         self.used_genres = []
@@ -113,7 +113,7 @@ class MusicPlayer:
             print(f"Test {current_cycle}: All Genres Have Been Played")
 
     def play_song(self, songs):
-        if songs and self.timer_app.timer_running:
+        if songs and self.flow_state_test_app.timer_running:
             song = songs.pop(0)
             self.current_song = os.path.splitext(os.path.basename(song))[0]
             print(self.current_song)
@@ -121,12 +121,12 @@ class MusicPlayer:
             mixer.music.play()
             self.played_songs.append(self.current_song)
             song_duration = mixer.Sound(song).get_length()
-            remaining_time = self.timer_app.get_remaining_time()
+            remaining_time = self.flow_state_test_app.get_remaining_time()
             if remaining_time > song_duration:
                 self.root.after(int(song_duration * 1000), self.play_song, songs)
 
 
-class TimerApp:
+class FlowStateTestApp:
     def __init__(self, root):
         self.root = root
         self.current_cycle = 1
@@ -135,7 +135,7 @@ class TimerApp:
         self.remaining_time = 0
         self.music_player = MusicPlayer(self)
 
-        self.root.title("Timer")
+        self.root.title("Music and Math Flow State Test")
         self.root.geometry("400x300")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -338,5 +338,5 @@ class TimerApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TimerApp(root)
+    app = FlowStateTestApp(root)
     root.mainloop()
