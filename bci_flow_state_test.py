@@ -148,11 +148,14 @@ class FlowStateTestApp:
         self.continue_button = tk.Button(self.root, text="Continue", command=self.on_continue, state=tk.DISABLED, fg="gray")
         self.udp_listeners = []
         
+        self.derivative_label = tk.Label(self.root, text="Find the derivative of:", font=("Arial", 14))
         self.polynomial_label = tk.Label(self.root, text="", font=("Arial", 16), wraplength=300)
         self.user_input = tk.Entry(self.root, font=("Arial", 16))
         self.check_button = tk.Button(self.root, text="Check Answer", command=self.check_answer)
         self.result_label = tk.Label(self.root, text="", font=("Arial", 16))
         self.correct_answers = 0
+        
+        self.user_input.bind('<Return>', self.check_input_and_answer)
 
     def start_timer(self):
         self.current_cycle = 1
@@ -160,7 +163,7 @@ class FlowStateTestApp:
         self.start_button.place_forget()
         self.test_interval_label.place(relx=0.5, rely=0.1, anchor=tk.CENTER)
         self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
-        self.timer_label.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
+        self.timer_label.place(relx=0.5, rely=0.3, anchor=tk.CENTER)
         print("Test 1: None")
         self.countdown(TIMER_DURATION_SECONDS)
         self.start_udp_listener()
@@ -233,23 +236,31 @@ class FlowStateTestApp:
             self.root.after(1000, self.break_countdown, seconds - 1)
 
     def show_polynomial_question(self):
+        self.derivative_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
         self.polynomial_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
         self.user_input.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
         self.check_button.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
         self.result_label.place(relx=0.5, rely=0.9, anchor=tk.CENTER)
 
     def hide_polynomial_question(self):
+        self.result_label.config(text="")
+        self.derivative_label.place_forget()
         self.polynomial_label.place_forget()
         self.user_input.place_forget()
         self.check_button.place_forget()
         self.result_label.place_forget()
             
     def generate_polynomial(self):
-        coefficients = [random.randint(-9, 9) for _ in range(4)]
-        exponents = [random.randint(-1, 5) for _ in range(4)]
+        coefficients = [random.randint(-9, 9) for _ in range(3)]
+        exponents = set()
+        while len(exponents) < 3:
+            exponents.add(random.randint(-1, 5))
+        exponents = list(exponents)
         x = sp.Symbol('x')
         self.polynomial = sum(coeff * x ** exp for coeff, exp in zip(coefficients, exponents))
         self.polynomial_label.config(text=str(sp.expand(self.polynomial)).replace('**', '^').replace('*', ''))
+    
+        self.derivative_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
         self.polynomial_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
         self.user_input.delete(0, tk.END)
         self.user_input.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
@@ -270,11 +281,17 @@ class FlowStateTestApp:
             if sp.simplify(user_derivative - actual_derivative) == 0:
                 self.result_label.config(text="Correct!", fg="green")
                 self.correct_answers += 1
+                print(f"Correct! Total Correct Answers: {self.correct_answers}")
                 self.generate_polynomial()  # Generate a new polynomial on a correct answer
             else:
                 self.result_label.config(text="Incorrect", fg="red")
         except sp.SympifyError:
             self.result_label.config(text="Invalid input", fg="red")
+            
+    def check_input_and_answer(self, event):
+        user_input = self.user_input.get()
+        if user_input:
+            self.check_answer()
     
     def create_summary_log(self):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
