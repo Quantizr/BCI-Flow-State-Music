@@ -9,6 +9,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import re
 import sympy as sp
+import signal
 
 TIMER_DURATION_SECONDS = 15 # change to appropriate value during testing e.g. 300
 BREAK_DURATION_SECONDS = 5 # change to appropriate value during testing e.g. 120
@@ -393,8 +394,19 @@ class FlowStateTestApp:
             self.udp_listener.stop()
             self.udp_listener.join()
         self.root.destroy()
+        
+    def on_quit(self, event=None):
+        self.on_closing()
+        self.root.quit()
 
 if __name__ == "__main__":
+    def signal_handler(signal, frame):
+        print("Exiting the application...")
+        root.event_generate("<<Quit>>")
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     root = tk.Tk()
     app = FlowStateTestApp(root)
+    root.bind("<<Quit>>", app.on_quit)
     root.mainloop()
