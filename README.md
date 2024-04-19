@@ -45,15 +45,20 @@ pip install tkinter pygame matplotlib sympy
 
 ## Usage
 
-1. Run the application:
+1. In the OpenBCI GUI Networking tab, set the following:
+    - Protocol: `UDP`
+    - IP: `127.0.0.1`
+    - Port: `12345`
+    - Data Type: `BandPower` (NOT `AvgBandPower`)
+2. Run the application:
 
 ```
 python bci_flow_state_test.py
 ```
 
-2. Follow the on-screen instructions to start the Musical Flow State Test.
-3. During the test intervals, find the derivative of the displayed polynomials and enter your answers.
-4. After completing all test intervals, the application will generate summary log files and graphs in the `logs` directory.
+3. Follow the on-screen instructions to start the Musical Flow State Test.
+4. During the test intervals, find the derivative of the displayed polynomials and enter your answers.
+5. After completing all test intervals, the application will generate summary log files and graphs in the `logs` directory.
 
 ## Configuration
 
