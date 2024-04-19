@@ -7,6 +7,8 @@ import json
 import threading
 from datetime import datetime
 import matplotlib.pyplot as plt
+import re
+import sympy as sp
 
 TIMER_DURATION_SECONDS = 15 # change to appropriate value during testing e.g. 300
 BREAK_DURATION_SECONDS = 5 # change to appropriate value during testing e.g. 120
@@ -145,6 +147,12 @@ class TimerApp:
         self.break_label = tk.Label(self.root, text="", font=("Arial", 18), fg="gray", wraplength=300)
         self.continue_button = tk.Button(self.root, text="Continue", command=self.on_continue, state=tk.DISABLED, fg="gray")
         self.udp_listeners = []
+        
+        self.polynomial_label = tk.Label(self.root, text="", font=("Arial", 16), wraplength=300)
+        self.user_input = tk.Entry(self.root, font=("Arial", 16))
+        self.check_button = tk.Button(self.root, text="Check Answer", command=self.check_answer)
+        self.result_label = tk.Label(self.root, text="", font=("Arial", 16))
+        self.correct_answers = 0
 
     def start_timer(self):
         self.current_cycle = 1
@@ -156,6 +164,7 @@ class TimerApp:
         print("Test 1: None")
         self.countdown(TIMER_DURATION_SECONDS)
         self.start_udp_listener()
+        self.generate_polynomial()
     
     def start_udp_listener(self):
         self.udp_listener = UDPListener(self)
@@ -168,6 +177,7 @@ class TimerApp:
         if seconds <= 0:
             self.timer_running = False
             self.remaining_time = 0
+            self.hide_polynomial_question()
             self.stop_udp_listener()
             self.create_summary_log()
             self.create_graph()
@@ -205,6 +215,9 @@ class TimerApp:
         self.countdown(TIMER_DURATION_SECONDS)
         self.music_player.play_music(self.current_cycle)
         self.start_udp_listener()
+        self.correct_answers = 0
+        self.generate_polynomial()
+        self.show_polynomial_question()
 
     def get_remaining_time(self):
         return self.remaining_time
@@ -218,6 +231,50 @@ class TimerApp:
             remaining_seconds = seconds % 60
             self.break_label.config(text=f"{minutes:02d}:{remaining_seconds:02d}")
             self.root.after(1000, self.break_countdown, seconds - 1)
+
+    def show_polynomial_question(self):
+        self.polynomial_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
+        self.user_input.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
+        self.check_button.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
+        self.result_label.place(relx=0.5, rely=0.9, anchor=tk.CENTER)
+
+    def hide_polynomial_question(self):
+        self.polynomial_label.place_forget()
+        self.user_input.place_forget()
+        self.check_button.place_forget()
+        self.result_label.place_forget()
+            
+    def generate_polynomial(self):
+        coefficients = [random.randint(-9, 9) for _ in range(4)]
+        exponents = [random.randint(-1, 5) for _ in range(4)]
+        x = sp.Symbol('x')
+        self.polynomial = sum(coeff * x ** exp for coeff, exp in zip(coefficients, exponents))
+        self.polynomial_label.config(text=str(sp.expand(self.polynomial)).replace('**', '^').replace('*', ''))
+        self.polynomial_label.place(relx=0.5, rely=0.6, anchor=tk.CENTER)
+        self.user_input.delete(0, tk.END)
+        self.user_input.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
+        self.check_button.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
+        self.result_label.place(relx=0.5, rely=0.9, anchor=tk.CENTER)
+
+    def check_answer(self):
+        user_derivative = self.user_input.get()
+        try:
+            user_derivative = user_derivative.replace('^', '**')
+            user_derivative = ''.join(
+                f'{char}*' if char.isdigit() and next_char.isalpha() else char
+                for char, next_char in zip(user_derivative, user_derivative[1:] + ' ')
+            )
+            user_derivative = re.sub(r'(\d+)(x)\^-(\d+)', r'\1/(\2**\3)', user_derivative)
+            user_derivative = sp.sympify(user_derivative)
+            actual_derivative = sp.diff(self.polynomial)
+            if sp.simplify(user_derivative - actual_derivative) == 0:
+                self.result_label.config(text="Correct!", fg="green")
+                self.correct_answers += 1
+                self.generate_polynomial()  # Generate a new polynomial on a correct answer
+            else:
+                self.result_label.config(text="Incorrect", fg="red")
+        except sp.SympifyError:
+            self.result_label.config(text="Invalid input", fg="red")
     
     def create_summary_log(self):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -227,6 +284,7 @@ class TimerApp:
             summary_log_file.write(f"Test Interval {self.current_cycle}:\n")
             summary_log_file.write(f"Genre: {self.music_player.used_genres[-1] if self.current_cycle > 1 else 'None'}\n")
             summary_log_file.write(f"Played Songs: {', '.join(self.music_player.played_songs) if self.current_cycle > 1 else 'None'}\n\n")
+            summary_log_file.write(f"Correct Answers: {self.correct_answers}\n\n")
 
             num_samples = len(self.udp_listener.band_powers)
             if num_samples > 0:
