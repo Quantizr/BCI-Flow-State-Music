@@ -1,3 +1,5 @@
+# WARNING: THIS CODE IS BUGGY AND MIGHT PLAY MUSIC DURING THE BREAK
+
 import tkinter as tk
 import os
 import random

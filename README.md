@@ -57,7 +57,7 @@ python bci_flow_state_test.py
 
 ## Configuration
 
-You can adjust the following constants in the `main.py` file:
+You can adjust the following constants in the `bci_flow_state_test.py` file:
 
 - `TIMER_DURATION_SECONDS`: Duration of each test interval (in seconds)
 - `BREAK_DURATION_SECONDS`: Duration of the break between test intervals (in seconds)
