@@ -20,7 +20,9 @@ class UDPListener(threading.Thread):
         super().__init__()
         self.stop_event = threading.Event()
         self.band_powers = []
+        self.num_channels = 0
         self.theta_alpha_ratios = []
+        self.per_channel_theta_alpha_ratios = []
         self.timestamps = []
         self.theta_values = []
         self.alpha_values = []
@@ -55,20 +57,22 @@ class UDPListener(threading.Thread):
 
     def process_band_power_data(self, data_dict):
         band_power_data = data_dict["data"]
-        num_channels = len(band_power_data)
+        self.num_channels = len(band_power_data)
 
-        channel_averages = [sum(row[i] for row in band_power_data) / num_channels for i in range(5)]
+        channel_averages = [sum(row[i] for row in band_power_data) / self.num_channels for i in range(5)]
         avg_theta = channel_averages[1]
         avg_alpha = channel_averages[2]
 
         self.timestamps.append(datetime.now())
         self.theta_values.append(avg_theta)
         self.alpha_values.append(avg_alpha)
+        self.band_powers.append(channel_averages)
 
         theta_alpha_ratio = avg_theta / avg_alpha if avg_alpha != 0 else float('inf')
-
-        self.band_powers.append(channel_averages)
+        per_channel_theta_alpha_ratio = [row[1] / row[2] for row in band_power_data]
+        
         self.theta_alpha_ratios.append(theta_alpha_ratio)
+        self.per_channel_theta_alpha_ratios.append(per_channel_theta_alpha_ratio)
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         log_entry = {
@@ -78,10 +82,11 @@ class UDPListener(threading.Thread):
             "current_song": self.flow_state_test_app.music_player.current_song,
             "band_power_data": band_power_data,
             "channel_averages": channel_averages,
-            "num_channels": num_channels,
+            "num_channels": self.num_channels,
             "avg_theta": avg_theta,
             "avg_alpha": avg_alpha,
-            "theta_alpha_ratio": theta_alpha_ratio
+            "theta_alpha_ratio": theta_alpha_ratio,
+            "per_channel_theta_alpha_ratio": per_channel_theta_alpha_ratio
         }
         self.detailed_log_file.write(json.dumps(log_entry) + "\n")
         self.detailed_log_file.flush()
@@ -338,13 +343,29 @@ class FlowStateTestApp:
     
             if len(self.udp_listener.theta_alpha_ratios) > 0:
                 avg_theta_alpha_whole = sum(self.udp_listener.theta_alpha_ratios) / len(self.udp_listener.theta_alpha_ratios)
-                summary_log_file.write(f"Average Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(f"Average Theta/Average Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
                 summary_log_file.write(str(avg_theta_alpha_whole) + "\n\n")
     
-            if len(self.udp_listener.theta_alpha_ratios) > 0:
                 avg_theta_alpha_middle = sum(self.udp_listener.theta_alpha_ratios[start_index:end_index]) / (end_index - start_index)
-                summary_log_file.write("Average Theta/Alpha Ratio (Middle Third):\n")
+                summary_log_file.write("Average Theta/Average Alpha Ratio (Middle Third):\n")
                 summary_log_file.write(str(avg_theta_alpha_middle) + "\n\n")
+                
+            if len(self.udp_listener.per_channel_theta_alpha_ratios) > 0:
+                per_channel_theta_alpha_whole = [sum(row[i] for row in self.udp_listener.per_channel_theta_alpha_ratios) / len(self.udp_listener.per_channel_theta_alpha_ratios) for i in range(self.udp_listener.num_channels)]
+                summary_log_file.write(f"Per Channel Theta/Average Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(str(per_channel_theta_alpha_whole) + "\n\n")
+                
+                per_channel_theta_alpha_middle = [sum(row[i] for row in self.udp_listener.per_channel_theta_alpha_ratios[start_index:end_index]) / (end_index - start_index) for i in range(self.udp_listener.num_channels)]
+                summary_log_file.write("Per Channel Theta/Alpha Ratio (Middle Third):\n")
+                summary_log_file.write(str(per_channel_theta_alpha_middle) + "\n\n")
+                
+                avg_per_channel_theta_alpha_whole = sum(per_channel_theta_alpha_whole) / self.udp_listener.num_channels
+                summary_log_file.write(f"Average Per Channel Theta/Average Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(str(avg_per_channel_theta_alpha_whole) + "\n\n")
+                
+                avg_per_channel_theta_alpha_middle = sum(per_channel_theta_alpha_middle) / self.udp_listener.num_channels
+                summary_log_file.write("Average Per Channel Theta/Alpha Ratio (Middle Third):\n")
+                summary_log_file.write(str(avg_per_channel_theta_alpha_middle) + "\n\n")
     
     def create_graph(self):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
