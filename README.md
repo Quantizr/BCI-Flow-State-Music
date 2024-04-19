@@ -4,8 +4,7 @@ This Python application is designed to test the effect of different music genres
 
 ## Features
 
-- GUI application with a user-friendly interface
-- Customizable test intervals, with a Customizable break between each interval
+- GUI application with customizable test interval lengths
 - During the first interval, no music is played
 - In the subsequent intervals, a random song from a random genre is played
 - Random polynomials are generated, and the user is asked to provide the derivative
