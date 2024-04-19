@@ -38,6 +38,7 @@ class UDPListener(threading.Thread):
         UDP_PORT = 12345
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(5)  # Set a timeout value (in seconds)
             sock.bind((UDP_IP, UDP_PORT))
 
             log_dir = "logs"
@@ -47,11 +48,14 @@ class UDPListener(threading.Thread):
             self.detailed_log_file = open(detailed_log_file_path, "w")
 
             while not self.stop_event.is_set():
-                data, _ = sock.recvfrom(1024)
-                data_dict = json.loads(data.decode())
-
-                if data_dict["type"] == "bandPower":
-                    self.process_band_power_data(data_dict)
+                try:
+                    data, _ = sock.recvfrom(1024)
+                    data_dict = json.loads(data.decode())
+    
+                    if data_dict["type"] == "bandPower":
+                        self.process_band_power_data(data_dict)
+                except socket.timeout:
+                    print("ERROR: No data received on UDP socket, recheck connection.")
 
             if self.detailed_log_file:
                 self.detailed_log_file.close()
@@ -369,10 +373,15 @@ class FlowStateTestApp:
                 summary_log_file.write(str(avg_per_channel_theta_alpha_middle) + "\n\n")
     
     def create_graph(self):
+        if not self.udp_listener.timestamps:
+            print("WARNING: No data saved.")
+            return
+        
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         graph_file_path = os.path.join("logs", f"{timestamp}_graph.png")
-
+    
         start_time = self.udp_listener.timestamps[0]
+        
         seconds_since_start = [(t - start_time).total_seconds() for t in self.udp_listener.timestamps]
 
         plt.figure(figsize=(10, 6))
