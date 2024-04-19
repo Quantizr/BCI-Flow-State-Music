@@ -134,13 +134,27 @@ class FlowStateTestApp:
         self.timer_running = False
         self.remaining_time = 0
         self.music_player = MusicPlayer(self)
-
-        self.root.title("Music and Math Flow State Test")
+    
+        self.root.title("Musical Flow State Test")
         self.root.geometry("400x300")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-        self.start_button = tk.Button(self.root, text="Start", command=self.start_timer)
-        self.start_button.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+    
+        # Initial screen
+        self.initial_frame = tk.Frame(self.root)
+        self.initial_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.title_label = tk.Label(self.initial_frame, text="Musical Flow State Test", font=("Arial", 24, "bold"))
+        self.title_label.pack(pady=10)
+        self.subtitle_label = tk.Label(self.initial_frame, text="Determining optimal music genre for flow state through analysis of theta-alpha wave ratio in EEG data", font=("Arial", 14), wraplength=300)
+        self.subtitle_label.pack(pady=10)
+        self.start_button = tk.Button(self.initial_frame, text="Start", command=self.show_test_info, font=("Arial", 16), padx=20, pady=10)
+        self.start_button.pack(pady=20)
+    
+        # Test information screen
+        self.test_info_frame = tk.Frame(self.root)
+        self.test_info_label = tk.Label(self.test_info_frame, text="There are four testing intervals with a break between each. In each testing interval, you will be solving derivatives of polynomials. In the first testing interval, you will do so without music. For the next three testing intervals, a random song from a random genre will be chosen. During these tests, the band power of your brain waves will be measured.", font=("Arial", 10), wraplength=300)
+        self.test_info_label.pack(pady=20)
+        self.continue_button = tk.Button(self.test_info_frame, text="Continue", command=self.start_timer, font=("Arial", 16), padx=20, pady=10)
+        self.continue_button.pack(pady=20)
 
         self.test_interval_label = tk.Label(self.root, text="", font=("Arial", 16))
         self.timer_label = tk.Label(self.root, text="", font=("Arial", 24), wraplength=300)
@@ -156,11 +170,17 @@ class FlowStateTestApp:
         self.correct_answers = 0
         
         self.user_input.bind('<Return>', self.check_input_and_answer)
+    
+    def show_test_info(self):
+       self.initial_frame.place_forget()
+       self.test_info_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
     def start_timer(self):
-        self.current_cycle = 1
-        self.music_player.used_genres = []
+        self.initial_frame.place_forget()
+        self.test_info_frame.place_forget()
         self.start_button.place_forget()
+        self.current_cycle = 1
+        self.music_player.used_genres = []    
         self.test_interval_label.place(relx=0.5, rely=0.1, anchor=tk.CENTER)
         self.test_interval_label.config(text=f"Test Interval {self.current_cycle}")
         self.timer_label.place(relx=0.5, rely=0.3, anchor=tk.CENTER)
