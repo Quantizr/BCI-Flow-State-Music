@@ -85,6 +85,7 @@ class UDPListener(threading.Thread):
             "test_interval": self.flow_state_test_app.current_cycle,
             "current_genre": self.flow_state_test_app.music_player.current_genre,
             "current_song": self.flow_state_test_app.music_player.current_song,
+            "num_correct": self.flow_state_test_app.correct_answers,
             "band_power_data": band_power_data,
             "channel_averages": channel_averages,
             "num_channels": self.num_channels,
@@ -133,7 +134,7 @@ class MusicPlayer:
             song_duration = mixer.Sound(song).get_length()
             remaining_time = self.flow_state_test_app.get_remaining_time()
             if remaining_time > song_duration:
-                self.root.after(int(song_duration * 1000), self.play_song, songs)
+                self.flow_state_test_app.root.after(int(song_duration * 1000), self.play_song, songs)
 
 
 class FlowStateTestApp:
@@ -357,7 +358,7 @@ class FlowStateTestApp:
                 
             if len(self.udp_listener.per_channel_theta_alpha_ratios) > 0:
                 per_channel_theta_alpha_whole = [sum(row[i] for row in self.udp_listener.per_channel_theta_alpha_ratios) / len(self.udp_listener.per_channel_theta_alpha_ratios) for i in range(self.udp_listener.num_channels)]
-                summary_log_file.write(f"Per Channel Theta/Average Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(f"Per Channel Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
                 summary_log_file.write(str(per_channel_theta_alpha_whole) + "\n\n")
                 
                 per_channel_theta_alpha_middle = [sum(row[i] for row in self.udp_listener.per_channel_theta_alpha_ratios[start_index:end_index]) / (end_index - start_index) for i in range(self.udp_listener.num_channels)]
@@ -365,7 +366,7 @@ class FlowStateTestApp:
                 summary_log_file.write(str(per_channel_theta_alpha_middle) + "\n\n")
                 
                 avg_per_channel_theta_alpha_whole = sum(per_channel_theta_alpha_whole) / self.udp_listener.num_channels
-                summary_log_file.write(f"Average Per Channel Theta/Average Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
+                summary_log_file.write(f"Average Per Channel Theta/Alpha Ratio (Duration: {TIMER_DURATION_SECONDS} seconds):\n")
                 summary_log_file.write(str(avg_per_channel_theta_alpha_whole) + "\n\n")
                 
                 avg_per_channel_theta_alpha_middle = sum(per_channel_theta_alpha_middle) / self.udp_listener.num_channels
@@ -376,27 +377,45 @@ class FlowStateTestApp:
         if not self.udp_listener.timestamps:
             print("WARNING: No data saved.")
             return
-        
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        graph_file_path = os.path.join("logs", f"{timestamp}_graph.png")
+        self.create_theta_alpha_graph(timestamp)
+        self.create_theta_alpha_ratio_graph(timestamp)
     
+    def create_theta_alpha_graph(self, timestamp):
         start_time = self.udp_listener.timestamps[0]
-        
         seconds_since_start = [(t - start_time).total_seconds() for t in self.udp_listener.timestamps]
-
+        
+        graph_file_path = os.path.join("logs", f"{timestamp}_theta_alpha_graph.png")
+        
         plt.figure(figsize=(10, 6))
         plt.plot(seconds_since_start, self.udp_listener.theta_values, label='Theta', color='blue')
         plt.plot(seconds_since_start, self.udp_listener.alpha_values, label='Alpha', color='green')
-        plt.plot(seconds_since_start, self.udp_listener.theta_alpha_ratios, label='Theta/Alpha Ratio', color='red')
-
+        
         plt.xlabel('Time (seconds)')
         plt.ylabel('Value')
-        plt.title('Theta, Alpha, and Theta/Alpha Ratio Over Time')
+        plt.title('Theta and Alpha Over Time')
         plt.legend()
         plt.grid(True)
         plt.savefig(graph_file_path)
         plt.close()
-
+    
+    def create_theta_alpha_ratio_graph(self, timestamp):
+        start_time = self.udp_listener.timestamps[0]
+        seconds_since_start = [(t - start_time).total_seconds() for t in self.udp_listener.timestamps]
+        
+        graph_file_path = os.path.join("logs", f"{timestamp}_theta_alpha_ratio_graph.png")
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(seconds_since_start, self.udp_listener.theta_alpha_ratios, label='Theta/Alpha Ratio', color='red')
+        
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('Theta/Alpha Ratio')
+        plt.title('Theta/Alpha Ratio Over Time')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(graph_file_path)
+        plt.close()
+    
     def on_closing(self):
         mixer.quit()
         if self.udp_listener.is_alive():

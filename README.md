@@ -39,7 +39,7 @@ cd BCI-Flow-State-Music
 4. Install the required packages:
 
 ```
-pip install tkinter pygame matplotlib sympy
+pip install pygame matplotlib sympy
 ```
 
 ## Usage
